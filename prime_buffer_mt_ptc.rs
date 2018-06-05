@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
 
 struct WorkerMeta {
-	tx: mpsc::Sender<(usize,u64)>,
+	check_tx: mpsc::Sender<(usize,u64)>,
 	tasks: u32
 }
 
@@ -27,14 +27,14 @@ fn main() {
 	//Each workers' transmitter and number of tasks is stored here.
 	let mut workers=vec![];
 	//Channel for sending data back to the main thread (this one).
-	let (txm,rxm)=mpsc::channel();
+	let (result_tx,result_rx)=mpsc::channel();
 	for id in 0..4 {
-		let (tx,rx)=mpsc::channel();
-		let txm=txm.clone();
+		let (check_tx,check_rx)=mpsc::channel();
+		let result_tx=result_tx.clone();
 		let primes=primes.clone();
-		thread::spawn(move || worker(id,rx,txm,primes));
+		thread::spawn(move || worker(id,check_rx,result_tx,primes));
 		workers.push(WorkerMeta {
-			tx: tx,
+			check_tx: check_tx,
 			tasks:0
 		});
 	}
@@ -53,7 +53,7 @@ fn main() {
 				buffer[buffer_write]=1;
 				//Send the number to be checked as well as the cell number so that the main thread
 				//knows where to put the result once the worker has submitted its work.
-				t.tx.send((buffer_write,test)).unwrap();
+				t.check_tx.send((buffer_write,test)).unwrap();
 
 				t.tasks+=1;
 				buffer_write=(buffer_write+1)%BUFFER_SIZE;
@@ -63,7 +63,7 @@ fn main() {
 
 		//Find how many tasks have been queued up, then receive that many times.
 		for _ in 0..(workers.iter().map(|t|t.tasks).sum()) {
-			let (id,cell,test)=rxm.recv().unwrap();
+			let (id,cell,test)=result_rx.recv().unwrap();
 			buffer[cell]=test;
 			workers[id].tasks-=1;
 		}
@@ -87,11 +87,11 @@ fn main() {
 
 fn worker(
 	id: usize,
-	rx: mpsc::Receiver<(usize,u64)>,
-	txm: mpsc::Sender<(usize,usize,u64)>,
+	check_rx: mpsc::Receiver<(usize,u64)>,
+	result_tx: mpsc::Sender<(usize,usize,u64)>,
 	primes: Arc<RwLock<Vec<u64>>>
 ) {
-	while let Ok((cell,test)) = rx.recv() {
+	while let Ok((cell,test)) = check_rx.recv() {
 		//Get a read lock each iteration. The main thread has a chance to get a write lock between
 		//each iteration while attempting to receive work.
 		let primes=primes.read().unwrap();
@@ -104,7 +104,7 @@ fn worker(
 				break;
 			}
 		}
-		txm.send((id,cell,if is_prime {test} else {0})).unwrap();
+		result_tx.send((id,cell,if is_prime {test} else {0})).unwrap();
 	}
 }
 
