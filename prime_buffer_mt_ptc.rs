@@ -6,6 +6,8 @@ struct WorkerMeta {
 	tasks: u32
 }
 
+const BUFFER_SIZE: usize=81920;
+
 fn main() {
 	let primes=Arc::new(RwLock::new(vec![2]));
 	let mut test=3;
@@ -18,7 +20,7 @@ fn main() {
 	0 for a test that was found not to be prime and should be skipped.
 	Any number greater than 1 is a prime and should be added to the prime list.
 	*/
-	let mut buffer=[1;81920];
+	let mut buffer=[1;BUFFER_SIZE];
 	let mut buffer_read=0;
 	let mut buffer_write=0;
 
@@ -44,7 +46,7 @@ fn main() {
 				if
 					test>=test_halt
 					||test>=test_limit
-					||(buffer_write+1)%81920==buffer_read
+					||(buffer_write+1)%BUFFER_SIZE==buffer_read
 					{break 'pumper;}
 
 				//Set the current cell to 1 to signify that a worker is busy with it.
@@ -54,7 +56,7 @@ fn main() {
 				t.tx.send((buffer_write,test)).unwrap();
 
 				t.tasks+=1;
-				buffer_write=(buffer_write+1)%81920;
+				buffer_write=(buffer_write+1)%BUFFER_SIZE;
 				test+=2;
 			}
 		}
@@ -76,7 +78,7 @@ fn main() {
 				primes_w.push(buffer[buffer_read]);
 				println!("{}", buffer[buffer_read]);
 			}
-			buffer_read=(buffer_read+1)%81920;
+			buffer_read=(buffer_read+1)%BUFFER_SIZE;
 		}
 		test_limit=vl0(&*primes_w);
 		if test>=test_halt {break;}
