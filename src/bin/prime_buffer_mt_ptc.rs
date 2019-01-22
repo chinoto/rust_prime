@@ -91,6 +91,7 @@ fn worker(
 	result_tx: mpsc::Sender<(usize,usize,u64)>,
 	primes: Arc<RwLock<Vec<u64>>>
 ) {
+	//TODO: wrap this whole thing in a loop, yield, get read lock outside loop, then while try_recv
 	while let Ok((cell,test)) = check_rx.recv() {
 		//Get a read lock each iteration. The main thread has a chance to get a write lock between
 		//each iteration while attempting to receive work.

@@ -1,0 +1,9 @@
+[package]
+name = "rust_prime"
+version = "0.1.0"
+authors = ["Damian J Pound <damian@thebestisp.com>"]
+
+[profile.dev]
+opt-level=2
+
+[dependencies]
