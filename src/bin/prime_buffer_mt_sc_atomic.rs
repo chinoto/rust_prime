@@ -1,19 +1,23 @@
 #![feature(integer_atomics)]
 use std::sync::{Arc, RwLock, mpsc, Mutex};
-use std::thread;
+use std::{env,thread};
 use std::collections::VecDeque;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const BUFFER_SIZE: usize=81920;
+const CHECK_BUFFER_SIZE: usize=2000;
+const MAIN_CHECK_SIZE: usize=16;
+const WORKER_CAP: usize=100;
 
 fn main() {
-	let primes=Arc::new(RwLock::new(vec![2]));
+	let primes=Arc::new(RwLock::new(vec![2u64]));
+	let mut insert_buffer=Vec::new();
 	let mut test=3;
-	let test_halt=1e7 as u64;
-	let mut test_limit=vl0(&*primes.read().unwrap());
-
-	let mut buffer=VecDeque::with_capacity(BUFFER_SIZE);
+	let test_halt=env::args()
+		.nth(1).expect("Provide a limit.")
+		.parse::<f64>().expect("Failed to parse limit") as u64;
+	let mut test_limit=primes.read().unwrap().last().unwrap().pow(2);
+	let mut check_buffer=VecDeque::with_capacity(CHECK_BUFFER_SIZE);
 
 	//Channels for between buffer and worker threads.
 	//The workers share the check receiver using a mutex, would be better to use a proper mpmc instead.
@@ -23,28 +27,31 @@ fn main() {
 	for _ in 0..4 {
 		let check_rx=check_rx.clone();
 		let primes=primes.clone();
-		thread::spawn(move || worker(check_rx, primes));
+		thread::spawn(|| worker(check_rx, primes));
 	}
 
 	loop {
 		while
 			test<=test_limit
 			&& test<=test_halt
+			&& check_buffer.len()<CHECK_BUFFER_SIZE
 		{
 			let result_a=Arc::new(AtomicU64::new(1));
 			check_tx.send((result_a.clone(),test)).unwrap();
-			buffer.push_back(result_a);
-			test+=2;
+			check_buffer.push_back(result_a);
+			loop {
+				test+=2;
+				if primes.read().unwrap().iter().take(MAIN_CHECK_SIZE).all(|&i| (test%i)!=0) {break;}
+			}
 		}
 		thread::yield_now();
 
 
-		let mut primes_o=None;
 		let mut ran=false;
 		loop {
 			//The compiler won't let me just do a `while let` and drop(result_a) before
-			//buffer.pop_front(), so we have a little nesting instead to work around scope issues.
-			if let Some(result_a)=buffer.front() {
+			//check_buffer.pop_front(), so we have a little nesting instead to work around scope issues.
+			if let Some(result_a)=check_buffer.front() {
 				let result=result_a.load(Ordering::Relaxed);
 				if result==1 {
 					//Only try again if we didn't get a new prime added to the list.
@@ -53,21 +60,22 @@ fn main() {
 					continue;
 				}
 				if result!=0 {
-					if primes_o.is_none() {primes_o=Some(primes.write().unwrap());}
+					insert_buffer.push(result);
 					println!("{:?}", result);
-					primes_o.as_mut().unwrap().push(result);
 				}
 				ran=true;
 			}
 			else {break;}
-			buffer.pop_front();
+			check_buffer.pop_front();
 		}
 
-		if primes_o.is_some() {
-			test_limit=vl0(primes_o.as_ref().unwrap());
+		if (test>=test_halt || test>=test_limit) && insert_buffer.len()>0 {
+			let mut primes_w=primes.write().unwrap();
+			primes_w.append(&mut insert_buffer);
+			test_limit=primes_w.last().unwrap().pow(2);
 		}
 
-		if test>=test_halt && buffer.len()==0 {
+		if test>=test_halt && check_buffer.len()==0 {
 			break;
 		}
 	}
@@ -77,9 +85,8 @@ fn worker(
 	check_rx: Arc<Mutex<mpsc::Receiver<(Arc<AtomicU64>,u64)>>>,
 	primes: Arc<RwLock<Vec<u64>>>
 ) {
-	const CAP: usize=500;
 	let mut len=0;
-	let mut work=Vec::with_capacity(CAP);
+	let mut work=Vec::with_capacity(WORKER_CAP);
 	loop {
 		//Give main() time to fill the channel.
 		thread::yield_now();
@@ -88,30 +95,18 @@ fn worker(
 		while let Ok(recv) = check_rx.try_recv() {
 			work.push(recv);
 			len+=1;
-			if len>=CAP {break;}
+			if len>=WORKER_CAP {break;}
 		}
 		len=0;
 		drop(check_rx);
 
-		let primes=primes.read().unwrap();
 		for (result_a,test) in work.drain(..) {
-			let mut is_prime=true;
 			let max=(test as f64).sqrt() as u64;
-			for i in &*primes {
-				if *i>max {break;}
-				if (test%*i)==0 {
-					is_prime=false;
-					break;
-				}
-			}
+			let is_prime=primes.read().unwrap().iter()
+				.skip(MAIN_CHECK_SIZE)
+				.take_while(|&&i| i<=max)
+				.all(|&i| (test%i)!=0);
 			result_a.store(if is_prime {test} else {0}, Ordering::Relaxed);
 		}
-	}
-}
-
-fn vl0(v: &Vec<u64>) -> u64 {
-	match v.last() {
-		Some(x) => x.pow(2),
-		None => 0
 	}
 }

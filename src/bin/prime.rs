@@ -1,3 +1,5 @@
+use std::env;
+
 fn main() {
 	//This is the list of primes found, which are used to
 	//determine if the current test value is prime as well.
@@ -5,22 +7,18 @@ fn main() {
 	//The current value to be tested for primality.
 	let mut test=3;
 	//The number at which finding primes stops.
-	let test_halt=1e7 as u64;
+	let test_halt=env::args()
+		.nth(1).expect("Provide a limit.")
+		.parse::<f64>().expect("Failed to parse limit") as u64;
 
 	while test<test_halt {
-		//Until proven otherwise, assume the value is prime.
-		let mut is_prime=true;
 		//Any value beyond the square root of the test is not a factor.
 		let max=(test as f64).sqrt() as u64;
-		for i in &primes {
-			if *i>max {break;}
-			//If test is divisible by i, it is not prime.
-			if (test%*i)==0 {
-				is_prime=false;
-				break;
-			}
-		}
-		if is_prime {
+		if primes.iter()
+			.take_while(|&&i| i<=max)
+			//If test is not divisible by all values of i, it is prime.
+			.all(|&i| (test%i)!=0)
+		{
 			primes.push(test);
 			println!("{}", test);
 		}

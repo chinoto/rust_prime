@@ -1,15 +1,20 @@
 use std::sync::{Arc, RwLock, mpsc, Mutex};
-use std::thread;
+use std::{env,thread};
 
-const BUFFER_SIZE: usize=81920;
+const CHECK_BUFFER_SIZE: usize=2000;
+const MAIN_CHECK_SIZE: usize=16;
+const WORKER_CAP: usize=100;
 
 fn main() {
-	let primes=Arc::new(RwLock::new(vec![2]));
+	let primes=Arc::new(RwLock::new(vec![2u64]));
+	let mut insert_buffer=Vec::new();
 	let mut test=3;
-	let test_halt=1e7 as u64;
-	let mut test_limit=vl0(&*primes.read().unwrap());
+	let test_halt=env::args()
+		.nth(1).expect("Provide a limit.")
+		.parse::<f64>().expect("Failed to parse limit") as u64;
+	let mut test_limit=(*primes.read().unwrap().last().unwrap()).pow(2);
 
-	let mut buffer=[1;BUFFER_SIZE];
+	let mut buffer=[1;CHECK_BUFFER_SIZE];
 	let mut buffer_read=0;
 	let mut buffer_write=0;
 
@@ -30,33 +35,35 @@ fn main() {
 		while
 			test<=test_limit
 			&& test<=test_halt
-			&& (buffer_write+1)%BUFFER_SIZE!=buffer_read
+			&& (buffer_write+1)%CHECK_BUFFER_SIZE!=buffer_read
 		{
 			check_tx.send((buffer_write,test)).unwrap();
-			test+=2;
-			buffer_write=(buffer_write+1)%BUFFER_SIZE;
+			buffer_write=(buffer_write+1)%CHECK_BUFFER_SIZE;
+			loop {
+				test+=2;
+				if primes.read().unwrap().iter().take(MAIN_CHECK_SIZE).all(|&i| (test%i)!=0) {break;}
+			}
 		}
 		thread::yield_now();
 
 
-		let mut primes_o=None;
 		while let Ok((cell,result))=result_rx.try_recv() {
 			buffer[cell]=result;
-			if buffer_read==cell {
-				while buffer[buffer_read]!=1 {
-					if buffer[buffer_read]!=0 {
-						if primes_o.is_none() {primes_o=Some(primes.write().unwrap());}
-						println!("{:?}", buffer[buffer_read]);
-						primes_o.as_mut().unwrap().push(buffer[buffer_read]);
-					}
-					buffer[buffer_read]=1;
-					buffer_read=(buffer_read+1)%BUFFER_SIZE;
-				}
-			}
 		}
 
-		if primes_o.is_some() {
-			test_limit=vl0(primes_o.as_ref().unwrap());
+		while buffer_read!=buffer_write && buffer[buffer_read]!=1 {
+			if buffer[buffer_read]!=0 {
+				insert_buffer.push(buffer[buffer_read]);
+				println!("{:?}", buffer[buffer_read]);
+			}
+			buffer[buffer_read]=1;
+			buffer_read=(buffer_read+1)%CHECK_BUFFER_SIZE;
+		}
+
+		if (test>=test_halt || test>=test_limit) && insert_buffer.len()>0 {
+			let mut primes_w=primes.write().unwrap();
+			primes_w.append(&mut insert_buffer);
+			test_limit=primes_w.last().unwrap().pow(2);
 		}
 
 		if test>=test_halt && buffer_read==buffer_write {
@@ -70,45 +77,27 @@ fn worker(
 	result_tx: mpsc::Sender<(usize,u64)>,
 	primes: Arc<RwLock<Vec<u64>>>
 ) {
-	const CAP: usize=500;
-	let mut len=0;
-	let mut work:[(usize,u64); CAP]=[(0,0); CAP];
-	loop {
+	let mut work:Vec<(usize,u64)>=Vec::with_capacity(WORKER_CAP);
+	'work: loop {
 		//Give main() time to fill the channel.
 		thread::yield_now();
 
 		let check_rx=check_rx.lock().unwrap();
 		while let Ok(recv) = check_rx.try_recv() {
-			//work.push(recv);
-			work[len]=recv;
-			len+=1;
-			if len>=CAP {break;}
+			work.push(recv);
+			if work.len()>=WORKER_CAP {break;}
 		}
 		drop(check_rx);
 
-		//Why is this slower?! D;
-		//if work.len()==0 {continue;}
-
 		let primes=primes.read().unwrap();
-		for &(cell,test) in work.iter().take(len) {
-			let mut is_prime=true;
+		for (cell,test) in work.drain(..) {
 			let max=(test as f64).sqrt() as u64;
-			for i in &*primes {
-				if *i>max {break;}
-				if (test%*i)==0 {
-					is_prime=false;
-					break;
-				}
-			}
-			result_tx.send((cell,if is_prime {test} else {0})).unwrap();
+			let is_prime=primes.iter()
+				.skip(MAIN_CHECK_SIZE)
+				.take_while(|&&i| i<=max)
+				//If test is not divisible by all values of i, it is prime.
+				.all(|&i| (test%i)!=0);
+			if result_tx.send((cell,if is_prime {test} else {0})).is_err() {break 'work;}
 		}
-		len=0;
-	}
-}
-
-fn vl0(v: &Vec<u64>) -> u64 {
-	match v.last() {
-		Some(x) => x.pow(2),
-		None => 0
 	}
 }
