@@ -53,46 +53,41 @@ fn main() {
         thread::yield_now();
 
         let mut ran = false;
-        loop {
-            //The compiler won't let me just do a `while let` and drop(result_a) before
-            //check_buffer.pop_front(), so we have a little nesting instead to work around scope issues.
-            if let Some(result_a) = check_buffer.front() {
-                let result = result_a.load(Ordering::Relaxed);
-                if result == 1 {
-                    //Only try again if we didn't get a new prime added to the list.
-                    if ran {
-                        break;
-                    }
-                    thread::yield_now();
-                    continue;
+        // This used to require a hack before non-lexical lifetimes
+        // https://stackoverflow.com/questions/50251487/what-are-non-lexical-lifetimes
+        while let Some(result_a) = check_buffer.front() {
+            let result = result_a.load(Ordering::Relaxed);
+            if result == 1 {
+                //Only try again if we didn't get a new prime added to the list.
+                if ran {
+                    break;
                 }
-                if result != 0 {
-                    insert_buffer.push(result);
-                    println!("{:?}", result);
-                }
-                ran = true;
-            } else {
-                break;
+                thread::yield_now();
+                continue;
             }
+            if result != 0 {
+                insert_buffer.push(result);
+                println!("{:?}", result);
+            }
+            ran = true;
             check_buffer.pop_front();
         }
 
-        if (test >= test_halt || test >= test_limit) && insert_buffer.len() > 0 {
+        if (test >= test_halt || test >= test_limit) && !insert_buffer.is_empty() {
             let mut primes_w = primes.write().unwrap();
             primes_w.append(&mut insert_buffer);
             test_limit = primes_w.last().unwrap().pow(2);
         }
 
-        if test >= test_halt && check_buffer.len() == 0 {
+        if test >= test_halt && check_buffer.is_empty() {
             break;
         }
     }
 }
 
-fn worker(
-    check_rx: Arc<Mutex<mpsc::Receiver<(Arc<AtomicU64>, u64)>>>,
-    primes: Arc<RwLock<Vec<u64>>>,
-) {
+type Work = (Arc<AtomicU64>, u64); // Just for clippy...
+
+fn worker(check_rx: Arc<Mutex<mpsc::Receiver<Work>>>, primes: Arc<RwLock<Vec<u64>>>) {
     let mut len = 0;
     let mut work = Vec::with_capacity(WORKER_CAP);
     loop {

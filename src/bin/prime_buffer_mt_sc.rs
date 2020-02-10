@@ -68,7 +68,7 @@ fn main() {
             buffer_read = (buffer_read + 1) % CHECK_BUFFER_SIZE;
         }
 
-        if (test >= test_halt || test >= test_limit) && insert_buffer.len() > 0 {
+        if (test >= test_halt || test >= test_limit) && !insert_buffer.is_empty() {
             let mut primes_w = primes.write().unwrap();
             primes_w.append(&mut insert_buffer);
             test_limit = primes_w.last().unwrap().pow(2);

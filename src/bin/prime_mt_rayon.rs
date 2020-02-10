@@ -25,6 +25,7 @@ fn main() {
         let primes_copy = primes.clone();
         primes.par_extend(
             //rayon doesn't support `a..=b`, `a..b+1` is equivalent in this case.
+            #[allow(clippy::range_plus_one)]
             (test..test_limit + 1).into_par_iter().filter(|test| {
                 if (test & 1) == 0 {
                     return false;
