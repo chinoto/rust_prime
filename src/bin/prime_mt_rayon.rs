@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use std::cmp::min;
 
 fn main() {
-    let mut primes = vec![2u64];
+    let mut primes = vec![2usize];
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
 
@@ -23,7 +23,7 @@ fn main() {
             { (test..test_limit + 1).into_par_iter() }
                 .filter(|test| (test & 1) != 0)
                 .filter(|test| {
-                    let max = (*test as f64).sqrt() as u64;
+                    let max = (*test as f64).sqrt() as usize;
                     { primes_copy[1..].iter() }
                         .take_while(|&&p| p <= max)
                         .all(|p| (test % p) != 0)

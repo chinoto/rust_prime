@@ -2,14 +2,14 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const CHECK_BUFFER_SIZE: usize = 2000;
 const MAIN_CHECK_SIZE: usize = 16;
 const WORKER_CAP: usize = 100;
 
 fn main() {
-    let primes = Arc::new(RwLock::new(vec![2u64]));
+    let primes = Arc::new(RwLock::new(vec![2usize]));
     let mut insert_buffer = Vec::new();
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
@@ -29,7 +29,7 @@ fn main() {
 
     loop {
         while test <= test_limit && test <= test_halt && check_buffer.len() < CHECK_BUFFER_SIZE {
-            let result_a = Arc::new(AtomicU64::new(1));
+            let result_a = Arc::new(AtomicUsize::new(1));
             check_tx.send((result_a.clone(), test)).unwrap();
             check_buffer.push_back(result_a);
             loop {
@@ -80,9 +80,9 @@ fn main() {
     }
 }
 
-type Work = (Arc<AtomicU64>, u64); // Just for clippy...
+type Work = (Arc<AtomicUsize>, usize); // Just for clippy...
 
-fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<u64>>>) {
+fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<usize>>>) {
     let mut len = 0;
     let mut work = Vec::with_capacity(WORKER_CAP);
     loop {
@@ -102,7 +102,7 @@ fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<u
 
         let primes_guard = primes.read().unwrap();
         for (result_a, test) in work.drain(..) {
-            let max = (test as f64).sqrt() as u64;
+            let max = (test as f64).sqrt() as usize;
             let is_prime = primes_guard
                 .iter()
                 .skip(MAIN_CHECK_SIZE)

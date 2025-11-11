@@ -1,7 +1,7 @@
 const BUFFER_SIZE: usize = 81920;
 
 fn main() {
-    let mut primes: Vec<u64> = vec![2];
+    let mut primes: Vec<usize> = vec![2];
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
     // This is the last number that can be checked before the buffer needs to be drained into the primes list.
@@ -12,7 +12,7 @@ fn main() {
     let mut buffer_write = 0;
 
     while test < test_halt {
-        let max = (test as f64).sqrt() as u64;
+        let max = (test as f64).sqrt() as usize;
         if primes
             .iter()
             .take_while(|&&i| i <= max)

@@ -6,7 +6,7 @@ const INSERT_BUFFER_SIZE: usize = 16;
 const MAIN_CHECK_SIZE: usize = 16;
 
 fn main() {
-    let primes = Arc::new(RwLock::new(vec![2u64]));
+    let primes = Arc::new(RwLock::new(vec![2usize]));
     let mut insert_buffer = [0; INSERT_BUFFER_SIZE];
     let mut insert_buffer_len = 0;
     let mut test = 3;
@@ -101,14 +101,14 @@ fn main() {
 }
 
 fn worker(
-    check_rx: &mpsc::Receiver<(usize, u64)>,
-    result_tx: &mpsc::Sender<(usize, u64)>,
-    primes: &Arc<RwLock<Vec<u64>>>,
+    check_rx: &mpsc::Receiver<(usize, usize)>,
+    result_tx: &mpsc::Sender<(usize, usize)>,
+    primes: &Arc<RwLock<Vec<usize>>>,
 ) {
     while let Ok((cell, test)) = check_rx.recv() {
         // Get a read lock each iteration. The main thread has a chance to get a write lock between
         // each iteration while attempting to receive work.
-        let max = (test as f64).sqrt() as u64;
+        let max = (test as f64).sqrt() as usize;
         let is_prime = primes
             .read()
             .unwrap()

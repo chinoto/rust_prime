@@ -1,7 +1,7 @@
 fn main() {
     // This is the list of primes found, which are used to
     // determine if the current test value is prime as well.
-    let mut primes: Vec<u64> = vec![2];
+    let mut primes: Vec<usize> = vec![2];
     // The current value to be tested for primality.
     let mut test = 3;
     // The number at which finding primes stops.
@@ -9,7 +9,7 @@ fn main() {
 
     while test < test_halt {
         // Any value beyond the square root of the test is not a factor.
-        let max = (test as f64).sqrt() as u64;
+        let max = (test as f64).sqrt() as usize;
         if primes
             .iter()
             .take_while(|&&i| i <= max)

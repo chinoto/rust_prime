@@ -7,7 +7,7 @@ const MAIN_CHECK_SIZE: usize = 16;
 const WORKER_CAP: usize = 100;
 
 fn main() {
-    let mut primes = Cow::from(vec![2u64]);
+    let mut primes = Cow::from(vec![2usize]);
     let shared_primes = Arc::new(RwLock::new(primes.clone()));
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
@@ -75,11 +75,11 @@ fn main() {
 }
 
 fn worker(
-    check_rx: &Arc<Mutex<mpsc::Receiver<(usize, u64)>>>,
-    result_tx: &mpsc::Sender<(usize, u64)>,
-    primes_shared: &Arc<RwLock<Cow<[u64]>>>,
+    check_rx: &Arc<Mutex<mpsc::Receiver<(usize, usize)>>>,
+    result_tx: &mpsc::Sender<(usize, usize)>,
+    primes_shared: &Arc<RwLock<Cow<[usize]>>>,
 ) {
-    let mut work: Vec<(usize, u64)> = Vec::with_capacity(WORKER_CAP);
+    let mut work: Vec<(usize, usize)> = Vec::with_capacity(WORKER_CAP);
     let mut primes = primes_shared.read().unwrap().clone();
     let mut last = *primes.last().unwrap();
     'work: loop {
@@ -96,7 +96,7 @@ fn worker(
         drop(check_rx);
 
         for (cell, test) in work.drain(..) {
-            let max = (test as f64).sqrt() as u64;
+            let max = (test as f64).sqrt() as usize;
             while last < max {
                 thread::yield_now();
                 primes = primes_shared.read().unwrap().clone();

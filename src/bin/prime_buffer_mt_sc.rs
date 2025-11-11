@@ -6,7 +6,7 @@ const MAIN_CHECK_SIZE: usize = 16;
 const WORKER_CAP: usize = 100;
 
 fn main() {
-    let primes = Arc::new(RwLock::new(vec![2u64]));
+    let primes = Arc::new(RwLock::new(vec![2usize]));
     let mut insert_buffer = Vec::new();
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
@@ -77,11 +77,11 @@ fn main() {
 }
 
 fn worker(
-    check_rx: &Arc<Mutex<mpsc::Receiver<(usize, u64)>>>,
-    result_tx: &mpsc::Sender<(usize, u64)>,
-    primes: &Arc<RwLock<Vec<u64>>>,
+    check_rx: &Arc<Mutex<mpsc::Receiver<(usize, usize)>>>,
+    result_tx: &mpsc::Sender<(usize, usize)>,
+    primes: &Arc<RwLock<Vec<usize>>>,
 ) {
-    let mut work: Vec<(usize, u64)> = Vec::with_capacity(WORKER_CAP);
+    let mut work: Vec<(usize, usize)> = Vec::with_capacity(WORKER_CAP);
     'work: loop {
         // Give main() time to fill the channel.
         thread::yield_now();
@@ -97,7 +97,7 @@ fn worker(
 
         let primes = primes.read().unwrap();
         for (cell, test) in work.drain(..) {
-            let max = (test as f64).sqrt() as u64;
+            let max = (test as f64).sqrt() as usize;
             let is_prime = primes
                 .iter()
                 .skip(MAIN_CHECK_SIZE)
