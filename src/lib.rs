@@ -20,3 +20,12 @@ pub fn get_halt_arg() -> usize {
         .parse::<f64>()
         .expect("Failed to parse limit") as usize
 }
+
+pub fn check_primality(test: usize, primes: &[usize]) -> bool {
+    // The largest prime factor of a number is potentially its square root
+    let max = test.isqrt();
+    { primes.iter() }
+        .take_while(|&&i| i <= max)
+        // If test is not divisible by all values of i, it is prime.
+        .all(|&i| !test.is_multiple_of(i))
+}

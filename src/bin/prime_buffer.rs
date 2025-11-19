@@ -1,4 +1,4 @@
-use rust_prime::TOTAL_WORK_LIMIT;
+use rust_prime::{TOTAL_WORK_LIMIT, check_primality};
 
 fn main() {
     let mut primes: Vec<usize> = vec![2];
@@ -12,13 +12,7 @@ fn main() {
     let mut buffer_write = 0;
 
     while test < test_halt {
-        let max = (test as f64).sqrt() as usize;
-        if primes
-            .iter()
-            .take_while(|&&i| i <= max)
-            // If test is not divisible by all values of i, it is prime.
-            .all(|&i| (test % i) != 0)
-        {
+        if check_primality(test, &primes) {
             // Write to the current cell and advance the cursor.
             buffer[buffer_write] = test;
             buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;

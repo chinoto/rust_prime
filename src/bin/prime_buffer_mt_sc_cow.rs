@@ -1,4 +1,4 @@
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
@@ -90,11 +90,7 @@ fn worker(
                 primes = primes_shared.read().unwrap().clone();
                 last = *primes.last().unwrap();
             }
-            let is_prime = primes
-                .iter()
-                .take_while(|&&i| i <= max)
-                // If test is not divisible by all values of i, it is prime.
-                .all(|&i| (test % i) != 0);
+            let is_prime = check_primality(test, &primes);
             if result_tx
                 .send((cell, if is_prime { test } else { 0 }))
                 .is_err()

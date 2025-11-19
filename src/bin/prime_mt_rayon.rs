@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use rust_prime::check_primality;
 use std::cmp::min;
 
 fn main() {
@@ -22,12 +23,7 @@ fn main() {
             #[allow(clippy::range_plus_one)]
             { (test..test_limit + 1).into_par_iter() }
                 .filter(|test| (test & 1) != 0)
-                .filter(|test| {
-                    let max = (*test as f64).sqrt() as usize;
-                    { primes_copy[1..].iter() }
-                        .take_while(|&&p| p <= max)
-                        .all(|p| (test % p) != 0)
-                }),
+                .filter(|&test| check_primality(test, &primes_copy[1..])),
         );
         test = test_limit + 1;
     }

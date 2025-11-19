@@ -1,7 +1,6 @@
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
-
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
@@ -84,12 +83,7 @@ fn worker(
 
         let primes = primes.read().unwrap();
         for (cell, test) in work.drain(..) {
-            let max = (test as f64).sqrt() as usize;
-            let is_prime = primes
-                .iter()
-                .take_while(|&&i| i <= max)
-                // If test is not divisible by all values of i, it is prime.
-                .all(|&i| (test % i) != 0);
+            let is_prime = check_primality(test, &primes);
             if result_tx
                 .send((cell, if is_prime { test } else { 0 }))
                 .is_err()

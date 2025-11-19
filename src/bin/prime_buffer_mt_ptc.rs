@@ -1,7 +1,6 @@
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
-
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
@@ -95,13 +94,7 @@ fn worker(
     while let Ok((cell, test)) = check_rx.recv() {
         // Get a read lock each iteration. The main thread has a chance to get a write lock between
         // each iteration while attempting to receive work.
-        let max = (test as f64).sqrt() as usize;
-        let is_prime = primes
-            .read()
-            .unwrap()
-            .iter()
-            .take_while(|&&i| i <= max)
-            .all(|&i| (test % i) != 0);
+        let is_prime = check_primality(test, &primes.read().unwrap());
         if result_tx
             .send((cell, if is_prime { test } else { 0 }))
             .is_err()

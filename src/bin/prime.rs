@@ -1,3 +1,5 @@
+use rust_prime::check_primality;
+
 fn main() {
     // This is the list of primes found, which are used to
     // determine if the current test value is prime as well.
@@ -8,14 +10,7 @@ fn main() {
     let test_halt = rust_prime::get_halt_arg();
 
     while test < test_halt {
-        // Any value beyond the square root of the test is not a factor.
-        let max = (test as f64).sqrt() as usize;
-        if primes
-            .iter()
-            .take_while(|&&i| i <= max)
-            // If test is not divisible by all values of i, it is prime.
-            .all(|&i| (test % i) != 0)
-        {
+        if check_primality(test, &primes) {
             primes.push(test);
             println!("{test}");
         }

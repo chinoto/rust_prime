@@ -1,10 +1,8 @@
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
-
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
@@ -89,11 +87,7 @@ fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<u
 
         let primes_guard = primes.read().unwrap();
         for (result_a, test) in work.drain(..) {
-            let max = (test as f64).sqrt() as usize;
-            let is_prime = primes_guard
-                .iter()
-                .take_while(|&&i| i <= max)
-                .all(|&i| (test % i) != 0);
+            let is_prime = check_primality(test, &primes_guard);
             result_a.store(if is_prime { test } else { 0 }, Ordering::Relaxed);
         }
     }
