@@ -1,13 +1,11 @@
 use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
 
-const CHECK_BUFFER_SIZE: usize = 2000;
-const INSERT_BUFFER_SIZE: usize = 16;
-const MAIN_CHECK_SIZE: usize = 16;
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
-    let mut insert_buffer = [0; INSERT_BUFFER_SIZE];
+    let mut insert_buffer = [0; THREAD_WORK_LIMIT];
     let mut insert_buffer_len = 0;
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
@@ -19,13 +17,13 @@ fn main() {
     0 for a test that was found not to be prime and should be skipped.
     Any number greater than 1 is a prime and should be added to the prime list.
     */
-    let mut buffer = [1; CHECK_BUFFER_SIZE];
+    let mut buffer = [1; TOTAL_WORK_LIMIT];
     let mut buffer_read = 0;
     let mut buffer_write = 0;
 
     // Channel for sending data back to the main thread (this one).
     let (result_tx, result_rx) = mpsc::channel();
-    let mut workers = (0..rayon::current_num_threads())
+    let mut workers = (0..*THREAD_COUNT)
         .map(|_| {
             let (check_tx, check_rx) = mpsc::channel();
             let result_tx = result_tx.clone();
@@ -41,7 +39,7 @@ fn main() {
             for check_tx in &mut workers {
                 if test >= test_halt
                     || test >= test_limit
-                    || (buffer_write + 1) % CHECK_BUFFER_SIZE == buffer_read
+                    || (buffer_write + 1) % TOTAL_WORK_LIMIT == buffer_read
                 {
                     break 'pumper;
                 }
@@ -52,19 +50,8 @@ fn main() {
                 // knows where to put the result once the worker has submitted its work.
                 check_tx.send((buffer_write, test)).unwrap();
 
-                buffer_write = (buffer_write + 1) % CHECK_BUFFER_SIZE;
-                loop {
-                    test += 2;
-                    if primes
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .take(MAIN_CHECK_SIZE)
-                        .all(|&i| (test % i) != 0)
-                    {
-                        break;
-                    }
-                }
+                buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;
+                test += 2;
             }
         }
         thread::yield_now();
@@ -75,7 +62,7 @@ fn main() {
         }
 
         while buffer_read != buffer_write
-            && insert_buffer_len < INSERT_BUFFER_SIZE
+            && insert_buffer_len < THREAD_WORK_LIMIT
             && buffer[buffer_read] != 1
         {
             // 0 means the number tested was not prime, skip this branch if that is the case.
@@ -84,10 +71,10 @@ fn main() {
                 insert_buffer_len += 1;
                 println!("{:?}", buffer[buffer_read]);
             }
-            buffer_read = (buffer_read + 1) % CHECK_BUFFER_SIZE;
+            buffer_read = (buffer_read + 1) % TOTAL_WORK_LIMIT;
         }
 
-        if test >= test_halt || test >= test_limit || insert_buffer_len >= INSERT_BUFFER_SIZE {
+        if test >= test_halt || test >= test_limit || insert_buffer_len >= THREAD_WORK_LIMIT {
             let mut primes_w = primes.write().unwrap();
             primes_w.extend_from_slice(&insert_buffer[..insert_buffer_len]);
             insert_buffer_len = 0;
@@ -113,7 +100,6 @@ fn worker(
             .read()
             .unwrap()
             .iter()
-            .skip(MAIN_CHECK_SIZE)
             .take_while(|&&i| i <= max)
             .all(|&i| (test % i) != 0);
         if result_tx

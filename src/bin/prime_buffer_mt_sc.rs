@@ -1,9 +1,7 @@
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
-const CHECK_BUFFER_SIZE: usize = 2000;
-const MAIN_CHECK_SIZE: usize = 16;
-const WORKER_CAP: usize = 100;
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
@@ -12,7 +10,7 @@ fn main() {
     let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = (*primes.read().unwrap().last().unwrap()).pow(2);
 
-    let mut buffer = [1; CHECK_BUFFER_SIZE];
+    let mut buffer = [1; TOTAL_WORK_LIMIT];
     let mut buffer_read = 0;
     let mut buffer_write = 0;
 
@@ -22,7 +20,7 @@ fn main() {
     let check_rx = Arc::new(Mutex::new(check_rx));
     let (result_tx, result_rx) = mpsc::channel();
 
-    for _ in 0..rayon::current_num_threads() {
+    for _ in 0..*THREAD_COUNT {
         let check_rx = check_rx.clone();
         let result_tx = result_tx.clone();
         let primes = primes.clone();
@@ -32,22 +30,11 @@ fn main() {
     loop {
         while test <= test_limit
             && test <= test_halt
-            && (buffer_write + 1) % CHECK_BUFFER_SIZE != buffer_read
+            && (buffer_write + 1) % TOTAL_WORK_LIMIT != buffer_read
         {
             check_tx.send((buffer_write, test)).unwrap();
-            buffer_write = (buffer_write + 1) % CHECK_BUFFER_SIZE;
-            loop {
-                test += 2;
-                if primes
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .take(MAIN_CHECK_SIZE)
-                    .all(|&i| (test % i) != 0)
-                {
-                    break;
-                }
-            }
+            buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;
+            test += 2;
         }
         thread::yield_now();
 
@@ -61,7 +48,7 @@ fn main() {
                 println!("{:?}", buffer[buffer_read]);
             }
             buffer[buffer_read] = 1;
-            buffer_read = (buffer_read + 1) % CHECK_BUFFER_SIZE;
+            buffer_read = (buffer_read + 1) % TOTAL_WORK_LIMIT;
         }
 
         if (test >= test_halt || test >= test_limit) && !insert_buffer.is_empty() {
@@ -81,7 +68,7 @@ fn worker(
     result_tx: &mpsc::Sender<(usize, usize)>,
     primes: &Arc<RwLock<Vec<usize>>>,
 ) {
-    let mut work: Vec<(usize, usize)> = Vec::with_capacity(WORKER_CAP);
+    let mut work: Vec<(usize, usize)> = Vec::with_capacity(THREAD_WORK_LIMIT);
     'work: loop {
         // Give main() time to fill the channel.
         thread::yield_now();
@@ -89,7 +76,7 @@ fn worker(
         let check_rx = check_rx.lock().unwrap();
         while let Ok(recv) = check_rx.try_recv() {
             work.push(recv);
-            if work.len() >= WORKER_CAP {
+            if work.len() >= THREAD_WORK_LIMIT {
                 break;
             }
         }
@@ -100,7 +87,6 @@ fn worker(
             let max = (test as f64).sqrt() as usize;
             let is_prime = primes
                 .iter()
-                .skip(MAIN_CHECK_SIZE)
                 .take_while(|&&i| i <= max)
                 // If test is not divisible by all values of i, it is prime.
                 .all(|&i| (test % i) != 0);

@@ -4,9 +4,7 @@ use std::thread;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const CHECK_BUFFER_SIZE: usize = 2000;
-const MAIN_CHECK_SIZE: usize = 16;
-const WORKER_CAP: usize = 100;
+use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT};
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
@@ -14,36 +12,25 @@ fn main() {
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = primes.read().unwrap().last().unwrap().pow(2);
-    let mut check_buffer = VecDeque::with_capacity(CHECK_BUFFER_SIZE);
+    let mut check_buffer = VecDeque::with_capacity(TOTAL_WORK_LIMIT);
 
     // Channels for between buffer and worker threads.
     // The workers share the check receiver using a mutex, would be better to use a proper mpmc instead.
     let (check_tx, check_rx) = mpsc::channel();
     let check_rx = Arc::new(Mutex::new(check_rx));
 
-    for _ in 0..rayon::current_num_threads() {
+    for _ in 0..*THREAD_COUNT {
         let check_rx = check_rx.clone();
         let primes = primes.clone();
         thread::spawn(move || worker(&check_rx, &primes));
     }
 
     loop {
-        while test <= test_limit && test <= test_halt && check_buffer.len() < CHECK_BUFFER_SIZE {
+        while test <= test_limit && test <= test_halt && check_buffer.len() < TOTAL_WORK_LIMIT {
             let result_a = Arc::new(AtomicUsize::new(1));
             check_tx.send((result_a.clone(), test)).unwrap();
             check_buffer.push_back(result_a);
-            loop {
-                test += 2;
-                if primes
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .take(MAIN_CHECK_SIZE)
-                    .all(|&i| (test % i) != 0)
-                {
-                    break;
-                }
-            }
+            test += 2;
         }
         thread::yield_now();
 
@@ -84,7 +71,7 @@ type Work = (Arc<AtomicUsize>, usize); // Just for clippy...
 
 fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<usize>>>) {
     let mut len = 0;
-    let mut work = Vec::with_capacity(WORKER_CAP);
+    let mut work = Vec::with_capacity(THREAD_WORK_LIMIT);
     loop {
         // Give main() time to fill the channel.
         thread::yield_now();
@@ -93,7 +80,7 @@ fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<u
         while let Ok(recv) = check_rx.try_recv() {
             work.push(recv);
             len += 1;
-            if len >= WORKER_CAP {
+            if len >= THREAD_WORK_LIMIT {
                 break;
             }
         }
@@ -105,7 +92,6 @@ fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<u
             let max = (test as f64).sqrt() as usize;
             let is_prime = primes_guard
                 .iter()
-                .skip(MAIN_CHECK_SIZE)
                 .take_while(|&&i| i <= max)
                 .all(|&i| (test % i) != 0);
             result_a.store(if is_prime { test } else { 0 }, Ordering::Relaxed);
