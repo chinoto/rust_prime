@@ -1,5 +1,5 @@
-use std::sync::{mpsc, Arc, Mutex, RwLock};
-use std::{env, thread};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
+use std::thread;
 
 const CHECK_BUFFER_SIZE: usize = 2000;
 const MAIN_CHECK_SIZE: usize = 16;
@@ -9,28 +9,24 @@ fn main() {
     let primes = Arc::new(RwLock::new(vec![2u64]));
     let mut insert_buffer = Vec::new();
     let mut test = 3;
-    let test_halt = env::args()
-        .nth(1)
-        .expect("Provide a limit.")
-        .parse::<f64>()
-        .expect("Failed to parse limit") as u64;
+    let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = (*primes.read().unwrap().last().unwrap()).pow(2);
 
     let mut buffer = [1; CHECK_BUFFER_SIZE];
     let mut buffer_read = 0;
     let mut buffer_write = 0;
 
-    //Channels for between buffer and worker threads.
-    //The workers share the check receiver using a mutex, would be better to use a proper mpmc instead.
+    // Channels for between buffer and worker threads.
+    // The workers share the check receiver using a mutex, would be better to use a proper mpmc instead.
     let (check_tx, check_rx) = mpsc::channel();
     let check_rx = Arc::new(Mutex::new(check_rx));
     let (result_tx, result_rx) = mpsc::channel();
 
-    for _ in 0..4 {
+    for _ in 0..rayon::current_num_threads() {
         let check_rx = check_rx.clone();
         let result_tx = result_tx.clone();
         let primes = primes.clone();
-        thread::spawn(move || worker(check_rx, result_tx, primes));
+        thread::spawn(move || worker(&check_rx, &result_tx, &primes));
     }
 
     loop {
@@ -81,13 +77,13 @@ fn main() {
 }
 
 fn worker(
-    check_rx: Arc<Mutex<mpsc::Receiver<(usize, u64)>>>,
-    result_tx: mpsc::Sender<(usize, u64)>,
-    primes: Arc<RwLock<Vec<u64>>>,
+    check_rx: &Arc<Mutex<mpsc::Receiver<(usize, u64)>>>,
+    result_tx: &mpsc::Sender<(usize, u64)>,
+    primes: &Arc<RwLock<Vec<u64>>>,
 ) {
     let mut work: Vec<(usize, u64)> = Vec::with_capacity(WORKER_CAP);
     'work: loop {
-        //Give main() time to fill the channel.
+        // Give main() time to fill the channel.
         thread::yield_now();
 
         let check_rx = check_rx.lock().unwrap();
@@ -106,7 +102,7 @@ fn worker(
                 .iter()
                 .skip(MAIN_CHECK_SIZE)
                 .take_while(|&&i| i <= max)
-                //If test is not divisible by all values of i, it is prime.
+                // If test is not divisible by all values of i, it is prime.
                 .all(|&i| (test % i) != 0);
             if result_tx
                 .send((cell, if is_prime { test } else { 0 }))

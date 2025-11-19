@@ -1,10 +1,11 @@
 [package]
-name = "rust_prime"
+name    = "rust_prime"
 version = "0.1.0"
 authors = ["Damian J Pound <damian@thebestisp.com>"]
+edition = "2024"
 
-[profile.dev]
-opt-level=3
+[profile.release]
+debug = true
 
 [dependencies]
-rayon = "*"
+rayon = "1.11.0"

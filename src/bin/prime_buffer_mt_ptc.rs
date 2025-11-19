@@ -1,5 +1,5 @@
-use std::sync::{mpsc, Arc, RwLock};
-use std::{env, thread};
+use std::sync::{Arc, RwLock, mpsc};
+use std::thread;
 
 const CHECK_BUFFER_SIZE: usize = 2000;
 const INSERT_BUFFER_SIZE: usize = 16;
@@ -10,11 +10,7 @@ fn main() {
     let mut insert_buffer = [0; INSERT_BUFFER_SIZE];
     let mut insert_buffer_len = 0;
     let mut test = 3;
-    let test_halt = env::args()
-        .nth(1)
-        .expect("Provide a limit.")
-        .parse::<f64>()
-        .expect("Failed to parse limit") as u64;
+    let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = (*primes.read().unwrap().last().unwrap()).pow(2);
 
     /*
@@ -27,20 +23,20 @@ fn main() {
     let mut buffer_read = 0;
     let mut buffer_write = 0;
 
-    //Channel for sending data back to the main thread (this one).
+    // Channel for sending data back to the main thread (this one).
     let (result_tx, result_rx) = mpsc::channel();
-    let mut workers = (0..4)
+    let mut workers = (0..rayon::current_num_threads())
         .map(|_| {
             let (check_tx, check_rx) = mpsc::channel();
             let result_tx = result_tx.clone();
             let primes = primes.clone();
-            thread::spawn(move || worker(check_rx, result_tx, primes));
+            thread::spawn(move || worker(&check_rx, &result_tx, &primes));
             check_tx
         })
         .collect::<Vec<_>>();
 
     loop {
-        //Loop until the inner loop decides the workers have enough.
+        // Loop until the inner loop decides the workers have enough.
         'pumper: loop {
             for check_tx in &mut workers {
                 if test >= test_halt
@@ -50,10 +46,10 @@ fn main() {
                     break 'pumper;
                 }
 
-                //Set the current cell to 1 to signify that a worker is busy with it.
+                // Set the current cell to 1 to signify that a worker is busy with it.
                 buffer[buffer_write] = 1;
-                //Send the number to be checked as well as the cell number so that the main thread
-                //knows where to put the result once the worker has submitted its work.
+                // Send the number to be checked as well as the cell number so that the main thread
+                // knows where to put the result once the worker has submitted its work.
                 check_tx.send((buffer_write, test)).unwrap();
 
                 buffer_write = (buffer_write + 1) % CHECK_BUFFER_SIZE;
@@ -73,7 +69,7 @@ fn main() {
         }
         thread::yield_now();
 
-        //Find how many tasks have been queued up, then receive that many times.
+        // Find how many tasks have been queued up, then receive that many times.
         while let Ok((cell, test)) = result_rx.try_recv() {
             buffer[cell] = test;
         }
@@ -82,7 +78,7 @@ fn main() {
             && insert_buffer_len < INSERT_BUFFER_SIZE
             && buffer[buffer_read] != 1
         {
-            //0 means the number tested was not prime, skip this branch if that is the case.
+            // 0 means the number tested was not prime, skip this branch if that is the case.
             if buffer[buffer_read] != 0 {
                 insert_buffer[insert_buffer_len] = buffer[buffer_read];
                 insert_buffer_len += 1;
@@ -105,13 +101,13 @@ fn main() {
 }
 
 fn worker(
-    check_rx: mpsc::Receiver<(usize, u64)>,
-    result_tx: mpsc::Sender<(usize, u64)>,
-    primes: Arc<RwLock<Vec<u64>>>,
+    check_rx: &mpsc::Receiver<(usize, u64)>,
+    result_tx: &mpsc::Sender<(usize, u64)>,
+    primes: &Arc<RwLock<Vec<u64>>>,
 ) {
     while let Ok((cell, test)) = check_rx.recv() {
-        //Get a read lock each iteration. The main thread has a chance to get a write lock between
-        //each iteration while attempting to receive work.
+        // Get a read lock each iteration. The main thread has a chance to get a write lock between
+        // each iteration while attempting to receive work.
         let max = (test as f64).sqrt() as u64;
         let is_prime = primes
             .read()
