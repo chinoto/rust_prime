@@ -1,10 +1,9 @@
 use rust_prime::{Queue, THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
-use std::borrow::Cow;
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
 fn main() {
-    let mut primes = Cow::from(vec![2usize]);
+    let mut primes = Arc::new(vec![2usize]);
     let shared_primes = Arc::new(RwLock::new(primes.clone()));
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
@@ -36,13 +35,15 @@ fn main() {
             check_buffer.update(index, result);
         }
 
+        // Where Copy-on-Write takes place.
+        let primes_inner: &mut Vec<usize> = Arc::make_mut(&mut primes);
         while let Some(result) = check_buffer.try_shift_prime() {
-            primes.to_mut().push(result);
+            primes_inner.push(result);
             println!("{result:?}");
         }
 
         if test >= test_limit {
-            primes.clone_into(&mut *shared_primes.write().unwrap());
+            *shared_primes.write().unwrap() = primes.clone();
             test_limit = primes.last().unwrap().pow(2);
         }
 
@@ -55,7 +56,7 @@ fn main() {
 fn worker(
     check_rx: &Arc<Mutex<mpsc::Receiver<(usize, usize)>>>,
     result_tx: &mpsc::Sender<(usize, usize)>,
-    primes_shared: &Arc<RwLock<Cow<[usize]>>>,
+    primes_shared: &Arc<RwLock<Arc<Vec<usize>>>>,
 ) {
     let mut work: Vec<(usize, usize)> = Vec::with_capacity(THREAD_WORK_LIMIT);
     let mut primes = primes_shared.read().unwrap().clone();
