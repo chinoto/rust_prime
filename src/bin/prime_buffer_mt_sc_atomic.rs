@@ -24,8 +24,8 @@ fn main() {
     }
 
     loop {
-        while test <= test_limit && test <= test_halt && check_buffer.len() < TOTAL_WORK_LIMIT {
-            let result_a = Arc::new(AtomicUsize::new(1));
+        while test <= test_limit.min(test_halt) && check_buffer.len() < TOTAL_WORK_LIMIT {
+            let result_a = Arc::new(AtomicUsize::new(0));
             check_tx.send((result_a.clone(), test)).unwrap();
             check_buffer.push_back(result_a);
             test += 2;
@@ -37,15 +37,14 @@ fn main() {
         // https://stackoverflow.com/questions/50251487/what-are-non-lexical-lifetimes
         while let Some(result_a) = check_buffer.front() {
             let result = result_a.load(Ordering::Relaxed);
-            if result == 1 {
+            if result == 0 {
                 // Only try again if we didn't get a new prime added to the list.
                 if ran {
                     break;
                 }
                 thread::yield_now();
                 continue;
-            }
-            if result != 0 {
+            } else if result > 1 {
                 insert_buffer.push(result);
                 println!("{result:?}");
             }
@@ -53,7 +52,7 @@ fn main() {
             check_buffer.pop_front();
         }
 
-        if (test >= test_halt || test >= test_limit) && !insert_buffer.is_empty() {
+        if test >= test_limit.min(test_halt) && !insert_buffer.is_empty() {
             let mut primes_w = primes.write().unwrap();
             primes_w.append(&mut insert_buffer);
             test_limit = primes_w.last().unwrap().pow(2);
@@ -68,27 +67,17 @@ fn main() {
 type Work = (Arc<AtomicUsize>, usize); // Just for clippy...
 
 fn worker(check_rx: &Arc<Mutex<mpsc::Receiver<Work>>>, primes: &Arc<RwLock<Vec<usize>>>) {
-    let mut len = 0;
     let mut work = Vec::with_capacity(THREAD_WORK_LIMIT);
     loop {
         // Give main() time to fill the channel.
         thread::yield_now();
 
-        let check_rx = check_rx.lock().unwrap();
-        while let Ok(recv) = check_rx.try_recv() {
-            work.push(recv);
-            len += 1;
-            if len >= THREAD_WORK_LIMIT {
-                break;
-            }
-        }
-        len = 0;
-        drop(check_rx);
+        work.extend(check_rx.lock().unwrap().try_iter().take(THREAD_WORK_LIMIT));
 
         let primes_guard = primes.read().unwrap();
         for (result_a, test) in work.drain(..) {
             let is_prime = check_primality(test, &primes_guard);
-            result_a.store(if is_prime { test } else { 0 }, Ordering::Relaxed);
+            result_a.store(if is_prime { test } else { 1 }, Ordering::Relaxed);
         }
     }
 }

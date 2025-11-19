@@ -1,4 +1,4 @@
-use rust_prime::{TOTAL_WORK_LIMIT, check_primality};
+use rust_prime::{Queue, TOTAL_WORK_LIMIT, check_primality};
 
 fn main() {
     let mut primes: Vec<usize> = vec![2];
@@ -7,30 +7,25 @@ fn main() {
     // This is the last number that can be checked before the buffer needs to be drained into the primes list.
     let mut test_limit = primes.last().unwrap().pow(2);
     // This is a ring buffer that hold all the primes found. Make it huge to avoid flushing often.
-    let mut buffer = [0; TOTAL_WORK_LIMIT];
-    let mut buffer_read = 0;
-    let mut buffer_write = 0;
+    let mut check_buffer = Queue::<TOTAL_WORK_LIMIT>::new();
 
     while test < test_halt {
         if check_primality(test, &primes) {
-            // Write to the current cell and advance the cursor.
-            buffer[buffer_write] = test;
-            buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;
+            check_buffer.push(test);
         }
         test += 2;
         if
         // If the next cell is the read cell, flush the contents now, otherwise the buffer breaks.
-        (buffer_write+1)%TOTAL_WORK_LIMIT==buffer_read
+        check_buffer.is_full()
 			// If the next test is past the limit and the buffer has content, flush.
-			|| test>=test_limit && buffer_read!=buffer_write
+			|| test>=test_limit && !check_buffer.is_empty()
 			// If we're halting, flush now because there won't be another chance.
 			|| test>=test_halt
         {
             // The buffer is empty when these are equal.
-            while buffer_read != buffer_write {
-                primes.push(buffer[buffer_read]);
-                println!("{}", buffer[buffer_read]);
-                buffer_read = (buffer_read + 1) % TOTAL_WORK_LIMIT;
+            while let Some(prime) = check_buffer.try_shift_prime() {
+                primes.push(prime);
+                println!("{prime}");
             }
             // Now that the buffer is drained into the primes list, a new limit can be set.
             test_limit = primes.last().unwrap().pow(2);

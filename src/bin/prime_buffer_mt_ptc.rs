@@ -1,24 +1,14 @@
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
+use rust_prime::{Queue, THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
 
 fn main() {
     let primes = Arc::new(RwLock::new(vec![2usize]));
-    let mut insert_buffer = [0; THREAD_WORK_LIMIT];
-    let mut insert_buffer_len = 0;
+    let mut insert_buffer = Vec::new();
     let mut test = 3;
     let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = (*primes.read().unwrap().last().unwrap()).pow(2);
-
-    /*
-    This time the buffer holds:
-    1 for a test that is being checked for primality by a worker and should be waited on.
-    0 for a test that was found not to be prime and should be skipped.
-    Any number greater than 1 is a prime and should be added to the prime list.
-    */
-    let mut buffer = [1; TOTAL_WORK_LIMIT];
-    let mut buffer_read = 0;
-    let mut buffer_write = 0;
+    let mut check_buffer = Queue::<TOTAL_WORK_LIMIT>::new();
 
     // Channel for sending data back to the main thread (this one).
     let (result_tx, result_rx) = mpsc::channel();
@@ -36,51 +26,34 @@ fn main() {
         // Loop until the inner loop decides the workers have enough.
         'pumper: loop {
             for check_tx in &mut workers {
-                if test >= test_halt
-                    || test >= test_limit
-                    || (buffer_write + 1) % TOTAL_WORK_LIMIT == buffer_read
-                {
+                if test >= test_limit.min(test_halt) || !check_buffer.is_empty() {
                     break 'pumper;
                 }
 
-                // Set the current cell to 1 to signify that a worker is busy with it.
-                buffer[buffer_write] = 1;
                 // Send the number to be checked as well as the cell number so that the main thread
                 // knows where to put the result once the worker has submitted its work.
-                check_tx.send((buffer_write, test)).unwrap();
-
-                buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;
+                check_tx.send((check_buffer.push(0), test)).unwrap();
                 test += 2;
             }
         }
         thread::yield_now();
 
-        // Find how many tasks have been queued up, then receive that many times.
-        while let Ok((cell, test)) = result_rx.try_recv() {
-            buffer[cell] = test;
+        for (cell, test) in result_rx.try_iter() {
+            check_buffer.update(cell, test);
         }
 
-        while buffer_read != buffer_write
-            && insert_buffer_len < THREAD_WORK_LIMIT
-            && buffer[buffer_read] != 1
-        {
-            // 0 means the number tested was not prime, skip this branch if that is the case.
-            if buffer[buffer_read] != 0 {
-                insert_buffer[insert_buffer_len] = buffer[buffer_read];
-                insert_buffer_len += 1;
-                println!("{:?}", buffer[buffer_read]);
-            }
-            buffer_read = (buffer_read + 1) % TOTAL_WORK_LIMIT;
+        while let Some(prime) = check_buffer.try_shift_prime() {
+            insert_buffer.push(prime);
+            println!("{prime:?}");
         }
 
-        if test >= test_halt || test >= test_limit || insert_buffer_len >= THREAD_WORK_LIMIT {
+        if test >= test_limit.min(test_halt) || insert_buffer.len() >= 100 {
             let mut primes_w = primes.write().unwrap();
-            primes_w.extend_from_slice(&insert_buffer[..insert_buffer_len]);
-            insert_buffer_len = 0;
+            primes_w.append(&mut insert_buffer);
             test_limit = primes_w.last().unwrap().pow(2);
         }
 
-        if test >= test_halt && buffer_read == buffer_write && insert_buffer_len == 0 {
+        if test >= test_halt && check_buffer.is_empty() && insert_buffer.is_empty() {
             break;
         }
     }
@@ -91,15 +64,20 @@ fn worker(
     result_tx: &mpsc::Sender<(usize, usize)>,
     primes: &Arc<RwLock<Vec<usize>>>,
 ) {
-    while let Ok((cell, test)) = check_rx.recv() {
-        // Get a read lock each iteration. The main thread has a chance to get a write lock between
-        // each iteration while attempting to receive work.
-        let is_prime = check_primality(test, &primes.read().unwrap());
-        if result_tx
-            .send((cell, if is_prime { test } else { 0 }))
-            .is_err()
-        {
-            break;
+    let mut work = Vec::with_capacity(THREAD_WORK_LIMIT);
+    loop {
+        // Give main() time to fill the channel.
+        thread::yield_now();
+        work.extend(check_rx.try_iter().take(THREAD_WORK_LIMIT));
+        let primes_guard = primes.read().unwrap();
+        for (cell, test) in work.drain(..) {
+            let is_prime = check_primality(test, &primes_guard);
+            if result_tx
+                .send((cell, if is_prime { test } else { 1 }))
+                .is_err()
+            {
+                return;
+            }
         }
     }
 }

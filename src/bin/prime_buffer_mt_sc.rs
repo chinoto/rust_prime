@@ -1,4 +1,4 @@
-use rust_prime::{THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
+use rust_prime::{Queue, THREAD_COUNT, THREAD_WORK_LIMIT, TOTAL_WORK_LIMIT, check_primality};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
@@ -9,9 +9,7 @@ fn main() {
     let test_halt = rust_prime::get_halt_arg();
     let mut test_limit = (*primes.read().unwrap().last().unwrap()).pow(2);
 
-    let mut buffer = [1; TOTAL_WORK_LIMIT];
-    let mut buffer_read = 0;
-    let mut buffer_write = 0;
+    let mut check_buffer = Queue::<TOTAL_WORK_LIMIT>::new();
 
     // Channels for between buffer and worker threads.
     // The workers share the check receiver using a mutex, would be better to use a proper mpmc instead.
@@ -27,36 +25,28 @@ fn main() {
     }
 
     loop {
-        while test <= test_limit
-            && test <= test_halt
-            && (buffer_write + 1) % TOTAL_WORK_LIMIT != buffer_read
-        {
-            check_tx.send((buffer_write, test)).unwrap();
-            buffer_write = (buffer_write + 1) % TOTAL_WORK_LIMIT;
+        while test <= test_limit && test <= test_halt && !check_buffer.is_full() {
+            check_tx.send((check_buffer.push(0), test)).unwrap();
             test += 2;
         }
         thread::yield_now();
 
-        while let Ok((cell, result)) = result_rx.try_recv() {
-            buffer[cell] = result;
+        for (cell, result) in result_rx.try_iter() {
+            check_buffer.update(cell, result);
         }
 
-        while buffer_read != buffer_write && buffer[buffer_read] != 1 {
-            if buffer[buffer_read] != 0 {
-                insert_buffer.push(buffer[buffer_read]);
-                println!("{:?}", buffer[buffer_read]);
-            }
-            buffer[buffer_read] = 1;
-            buffer_read = (buffer_read + 1) % TOTAL_WORK_LIMIT;
+        while let Some(prime) = check_buffer.try_shift_prime() {
+            insert_buffer.push(prime);
+            println!("{prime:?}");
         }
 
-        if (test >= test_halt || test >= test_limit) && !insert_buffer.is_empty() {
+        if (test >= test_limit.min(test_halt)) && !insert_buffer.is_empty() {
             let mut primes_w = primes.write().unwrap();
             primes_w.append(&mut insert_buffer);
             test_limit = primes_w.last().unwrap().pow(2);
         }
 
-        if test >= test_halt && buffer_read == buffer_write {
+        if test >= test_halt && check_buffer.is_empty() {
             break;
         }
     }
@@ -72,20 +62,13 @@ fn worker(
         // Give main() time to fill the channel.
         thread::yield_now();
 
-        let check_rx = check_rx.lock().unwrap();
-        while let Ok(recv) = check_rx.try_recv() {
-            work.push(recv);
-            if work.len() >= THREAD_WORK_LIMIT {
-                break;
-            }
-        }
-        drop(check_rx);
+        work.extend(check_rx.lock().unwrap().try_iter().take(THREAD_WORK_LIMIT));
 
         let primes = primes.read().unwrap();
         for (cell, test) in work.drain(..) {
             let is_prime = check_primality(test, &primes);
             if result_tx
-                .send((cell, if is_prime { test } else { 0 }))
+                .send((cell, if is_prime { test } else { 1 }))
                 .is_err()
             {
                 break 'work;

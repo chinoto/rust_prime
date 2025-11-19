@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 use rust_prime::check_primality;
-use std::cmp::min;
 
 fn main() {
     let mut primes = vec![2usize];
@@ -8,7 +7,7 @@ fn main() {
     let test_halt = rust_prime::get_halt_arg();
 
     while test < test_halt {
-        let test_limit = min(primes.last().unwrap().pow(2), test_halt);
+        let test_limit = primes.last().unwrap().pow(2).min(test_halt);
         // Can't push into primes list while reading it because that might cause a reallocation,
         // thus breaking any readers. Also, the borrow checker doesn't like it...
 
