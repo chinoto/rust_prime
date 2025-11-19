@@ -21,8 +21,7 @@ fn main() {
             // rayon doesn't support `a..=b`, `a..b+1` is equivalent in this case.
             #[allow(clippy::range_plus_one)]
             { (test..test_limit + 1).into_par_iter() }
-                .filter(|test| (test & 1) != 0)
-                .filter(|&test| check_primality(test, &primes_copy[1..])),
+                .filter(|&test| check_primality(test, &primes_copy)),
         );
         test = test_limit + 1;
     }
