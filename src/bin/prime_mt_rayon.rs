@@ -24,7 +24,6 @@ fn main() {
                 .filter(|&test| check_primality(test, &primes_copy)),
         );
         test = test_limit + 1;
+        primes[primes_copy.len()..].iter().for_each(|p| println!("{p:?}"));
     }
-    // Other impls only print primes added to the list, 2 was already there.
-    primes[1..].iter().for_each(|p| println!("{p:?}"));
 }
