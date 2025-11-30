@@ -46,7 +46,7 @@ fn main() {
                 continue;
             } else if result > 1 {
                 insert_buffer.push(result);
-                println!("{result:?}");
+                println!("{result}");
             }
             ran = true;
             check_buffer.pop_front();

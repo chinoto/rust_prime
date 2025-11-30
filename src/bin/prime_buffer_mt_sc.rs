@@ -37,7 +37,7 @@ fn main() {
 
         while let Some(prime) = check_buffer.try_shift_prime() {
             insert_buffer.push(prime);
-            println!("{prime:?}");
+            println!("{prime}");
         }
 
         if test >= test_limit && !insert_buffer.is_empty() {

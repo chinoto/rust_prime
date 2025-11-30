@@ -39,7 +39,7 @@ fn main() {
         let primes_inner: &mut Vec<usize> = Arc::make_mut(&mut primes);
         while let Some(result) = check_buffer.try_shift_prime() {
             primes_inner.push(result);
-            println!("{result:?}");
+            println!("{result}");
         }
 
         if test >= test_limit {

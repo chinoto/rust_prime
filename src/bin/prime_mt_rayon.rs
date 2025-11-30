@@ -24,6 +24,6 @@ fn main() {
                 .filter(|&test| check_primality(test, &primes_copy)),
         );
         test = test_limit + 1;
-        primes[primes_copy.len()..].iter().for_each(|p| println!("{p:?}"));
+        { primes[primes_copy.len()..].iter() }.for_each(|p| println!("{p}"));
     }
 }
