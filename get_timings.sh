@@ -14,13 +14,13 @@ binaries=(
 )
 
 echo "\
-| Seconds | CPU % | Binary |
-| ------: | ----: | :----- |"
+| (Kernel + User) / Real Seconds | CPU % | Binary |
+| -----------------------------: | ----: | :----- |"
 
 for bin in "${binaries[@]}"; do
     # If stdout is a terminal, show the binary name immediately.
     [ -t 1 ] && echo -n "${bin}"
-    timing=$((/usr/bin/time -f '%e | %P' "./target/release/${bin}" "${limit}" > /dev/null) 2>&1)
+    timing=$((/usr/bin/time -f '(%S + %U) / %e | %P' "./target/release/${bin}" "${limit}" > /dev/null) 2>&1)
     # Set `clear` to a carriage return if stdout is a terminal, otherwise an empty string.
     clear=''
     if [ -t 1 ]; then

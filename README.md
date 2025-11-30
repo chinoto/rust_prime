@@ -32,16 +32,16 @@ With that idea in mind, I created `prime_mt_range_map.rs` based on `prime_buffer
 ./get_timings.sh 1e7
 ```
 
-| Seconds | CPU % | Binary                    |
-| ------: | ----: | :------------------------ |
-|    0.76 |   98% | prime                     |
-|    0.74 |  100% | prime_buffer              |
-|    0.61 | 1361% | prime_buffer_mt_sc        |
-|    0.85 | 1195% | prime_buffer_mt_sc_atomic |
-|    0.60 | 1374% | prime_buffer_mt_sc_cow    |
-|    6.02 | 1588% | prime_buffer_mt_ptc       |
-|    0.38 |  328% | prime_mt_range_map        |
-|    0.41 |  297% | prime_mt_rayon            |
+| (Kernel + User) / Real Seconds | CPU % | Binary                    |
+| -----------------------------: | ----: | :------------------------ |
+|           (0.12 + 0.64) / 0.76 |  100% | prime                     |
+|           (0.12 + 0.64) / 0.76 |  100% | prime_buffer              |
+|           (2.93 + 5.13) / 0.60 | 1342% | prime_buffer_mt_sc        |
+|           (5.12 + 5.07) / 0.87 | 1159% | prime_buffer_mt_sc_atomic |
+|           (3.52 + 4.69) / 0.62 | 1322% | prime_buffer_mt_sc_cow    |
+|         (65.25 + 60.45) / 8.19 | 1534% | prime_buffer_mt_ptc       |
+|           (0.12 + 1.15) / 0.39 |  320% | prime_mt_range_map        |
+|           (0.16 + 1.03) / 0.41 |  291% | prime_mt_rayon            |
 
 ## TODO
 
