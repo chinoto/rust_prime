@@ -24,7 +24,7 @@ fn main() {
     }
 
     loop {
-        while test <= test_limit && check_buffer.len() < TOTAL_WORK_LIMIT {
+        while test < test_limit && check_buffer.len() < TOTAL_WORK_LIMIT {
             let result_a = Arc::new(AtomicUsize::new(0));
             check_tx.send((result_a.clone(), test)).unwrap();
             check_buffer.push_back(result_a);

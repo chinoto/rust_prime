@@ -25,7 +25,7 @@ fn main() {
     }
 
     loop {
-        while test <= test_limit && !check_buffer.is_full() {
+        while test < test_limit && !check_buffer.is_full() {
             check_tx.send((check_buffer.push(0), test)).unwrap();
             test += 2;
         }

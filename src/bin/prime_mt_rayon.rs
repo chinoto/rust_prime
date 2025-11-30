@@ -13,12 +13,10 @@ fn main() {
         // k+(k+n) < n+(k+n)
         let primes_copy = primes.clone();
         primes.par_extend(
-            // rayon doesn't support `a..=b`, `a..b+1` is equivalent in this case.
-            #[allow(clippy::range_plus_one)]
-            { (test..test_limit + 1).into_par_iter() }
+            { (test..test_limit).into_par_iter() }
                 .filter(|&test| check_primality(test, &primes_copy)),
         );
-        test = test_limit + 1;
+        test = test_limit;
         { primes[primes_copy.len()..].iter() }.for_each(|p| println!("{p}"));
     }
 }
