@@ -42,6 +42,8 @@ With that idea in mind, I created `prime_mt_range_map.rs` based on `prime_buffer
 |         (65.25 + 60.45) / 8.19 | 1534% | prime_buffer_mt_ptc       |
 |           (0.12 + 1.15) / 0.39 |  320% | prime_mt_range_map        |
 |           (0.16 + 1.03) / 0.41 |  291% | prime_mt_rayon            |
+|           (0.12 + 1.02) / 0.40 |  287% | prime_mt_orx              |
+|           (0.15 + 0.86) / 0.45 |  220% | prime_mt_chili            |
 
 ## TODO
 
