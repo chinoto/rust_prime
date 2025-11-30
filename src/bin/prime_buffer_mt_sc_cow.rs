@@ -25,7 +25,7 @@ fn main() {
     }
 
     loop {
-        while test <= test_limit.min(test_halt) && !check_buffer.is_full() {
+        while test <= test_limit && !check_buffer.is_full() {
             check_tx.send((check_buffer.push(0), test)).unwrap();
             test += 2;
         }
@@ -44,7 +44,7 @@ fn main() {
 
         if test >= test_limit {
             *shared_primes.write().unwrap() = primes.clone();
-            test_limit = primes.last().unwrap().pow(2);
+            test_limit = primes.last().unwrap().pow(2).min(test_halt);
         }
 
         if test >= test_halt && check_buffer.is_empty() {

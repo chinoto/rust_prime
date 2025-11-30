@@ -40,10 +40,10 @@ fn main() {
             println!("{prime:?}");
         }
 
-        if (test >= test_limit.min(test_halt)) && !insert_buffer.is_empty() {
+        if test >= test_limit && !insert_buffer.is_empty() {
             let mut primes_w = primes.write().unwrap();
             primes_w.append(&mut insert_buffer);
-            test_limit = primes_w.last().unwrap().pow(2);
+            test_limit = primes_w.last().unwrap().pow(2).min(test_halt);
         }
 
         if test >= test_halt && check_buffer.is_empty() {
