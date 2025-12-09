@@ -26,6 +26,19 @@ The results of my previous multithreading implementations were garbage mainly be
 
 With that idea in mind, I created `prime_mt_range_map.rs` based on `prime_buffer_mt_sc.rs` and used a `BTreeMap` to keep the batches in order instead of fussing with a manually implemented ring-buffer/queue.
 
+## 2025-12-09 Update
+
+Added more multi-threading library implementations:
+
+- Heartbeat scheduling based (workers offer a piece of work to a shared collection every "heartbeat" to minimize synchronization overhead):
+  - chili: based on the Zig library, spice; only offers a join API.
+    - Several data structures were tried, but any performance difference is so marginal that criterion would be needed to choose one.
+  - par-iter: Fork of rayon that can switch to using chili internally or disable parallelization.
+  - forte: general purpose thread pool with spawn and join APIs.
+- orx-parallel: Utilizes work-stealing like rayon.
+
+par-iter beats every multi-threading implementation in overall CPU time, while only being slightly slower in real time than the fastest implementation. Since par-iter uses chili internally, I'm not sure why my direct usage of chili is faster in real time, yet uses more CPU time.
+
 ## Benchmark
 
 ```sh
@@ -34,16 +47,21 @@ With that idea in mind, I created `prime_mt_range_map.rs` based on `prime_buffer
 
 | (Kernel + User) / Real Seconds | CPU % | Binary                    |
 | -----------------------------: | ----: | :------------------------ |
-|           (0.12 + 0.64) / 0.76 |  100% | prime                     |
-|           (0.12 + 0.64) / 0.76 |  100% | prime_buffer              |
-|           (2.93 + 5.13) / 0.60 | 1342% | prime_buffer_mt_sc        |
-|           (5.12 + 5.07) / 0.87 | 1159% | prime_buffer_mt_sc_atomic |
-|           (3.52 + 4.69) / 0.62 | 1322% | prime_buffer_mt_sc_cow    |
-|         (65.25 + 60.45) / 8.19 | 1534% | prime_buffer_mt_ptc       |
-|           (0.12 + 1.15) / 0.39 |  320% | prime_mt_range_map        |
-|           (0.16 + 1.03) / 0.41 |  291% | prime_mt_rayon            |
-|           (0.12 + 1.02) / 0.40 |  287% | prime_mt_orx              |
-|           (0.15 + 0.86) / 0.45 |  220% | prime_mt_chili            |
+|           (0.13 + 0.61) / 0.74 |  100% | prime                     |
+|           (0.11 + 0.62) / 0.74 |   99% | prime_buffer              |
+|           (0.13 + 1.13) / 0.38 |  326% | prime_mt_range_map        |
+|           (0.13 + 1.00) / 0.39 |  290% | prime_mt_orx              |
+|           (0.15 + 1.01) / 0.39 |  293% | prime_mt_forte_ll         |
+|           (0.12 + 1.07) / 0.41 |  290% | prime_mt_rayon            |
+|           (0.13 + 0.88) / 0.46 |  221% | prime_mt_chili_ll         |
+|           (0.13 + 0.90) / 0.46 |  225% | prime_mt_chili_mutex      |
+|           (0.15 + 0.87) / 0.46 |  221% | prime_mt_chili_enum       |
+|           (0.15 + 0.89) / 0.46 |  227% | prime_mt_chili_vec        |
+|           (0.14 + 0.69) / 0.49 |  169% | prime_mt_par_iter         |
+|           (2.99 + 5.06) / 0.58 | 1376% | prime_buffer_mt_sc        |
+|           (3.52 + 4.83) / 0.60 | 1377% | prime_buffer_mt_sc_cow    |
+|           (5.23 + 4.82) / 0.82 | 1213% | prime_buffer_mt_sc_atomic |
+|         (57.93 + 55.21) / 7.12 | 1588% | prime_buffer_mt_ptc       |
 
 ## TODO
 

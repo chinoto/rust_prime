@@ -9,5 +9,9 @@ debug = true
 
 [dependencies]
 chili        = "0.2.1"
+forte        = "1.0.0-alpha.4"
 orx-parallel = "3.4.0"
-rayon        = "1.11.0"
+# par-iter depends on par-core, but doesn't enable chili or rayon itself.
+par-core = { version = "2.0.0", features = ["chili"] }
+par-iter = "2.0.0"
+rayon    = "1.11.0"

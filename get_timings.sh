@@ -5,14 +5,19 @@ limit="${1:-1e7}"
 binaries=(
     prime
     prime_buffer
+    prime_mt_range_map
+    prime_mt_orx
+    prime_mt_forte_ll
+    prime_mt_rayon
+    prime_mt_chili_ll
+    prime_mt_chili_enum
+    prime_mt_chili_mutex
+    prime_mt_chili_vec
+    prime_mt_par_iter
+    prime_buffer_mt_sc_cow
     prime_buffer_mt_sc
     prime_buffer_mt_sc_atomic
-    prime_buffer_mt_sc_cow
     prime_buffer_mt_ptc
-    prime_mt_range_map
-    prime_mt_rayon
-    prime_mt_orx
-    prime_mt_chili
 )
 
 echo "\

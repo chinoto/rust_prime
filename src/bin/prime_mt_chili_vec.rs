@@ -12,7 +12,8 @@ fn main() {
         let test_limit = primes.last().unwrap().pow(2).min(test_halt);
         let range = test..test_limit;
         let new_primes = find_primes_in_range(&mut scope, &primes, range);
-        primes.extend(new_primes.iter().flatten().inspect(|p| println!("{p}")));
+        let new_primes_iter = new_primes.into_iter().flatten();
+        primes.extend(new_primes_iter.inspect(|p| println!("{p}")));
         test = test_limit;
     }
 }
